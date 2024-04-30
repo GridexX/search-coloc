@@ -1,0 +1,7 @@
+apartments.json
+credentials.json
+token.json
+.env
+.envrc
+mail.html
+node_modules/
