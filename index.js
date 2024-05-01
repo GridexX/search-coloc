@@ -8,7 +8,7 @@ const axios = require('axios');
 const { firstBy } = require('thenby');
 
 // If modifying these scopes, delete token.json.
-const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly'];
+const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/calendar.readonly', 'https://www.googleapis.com/auth/calendar'];
 // The file token.json stores the user's access and refresh tokens, and is
 // created automatically when the authorization flow completes for the first
 // time.
@@ -70,7 +70,7 @@ async function authorize() {
 
 async function calculateTravelTime(origin, destination, mode) {
 
-  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+  const apiKey = process.env.GOOGLE_API_KEY;
 
   if (!apiKey) {
     console.error('No Google Maps API key provided');
@@ -308,7 +308,7 @@ async function listMessages(auth) {
           // Write each keys of the object to the file
           for (const apartment of apartmentsFiltered) {
             const { title, rent, rooms, roomSurface, street, travelTimeBikeToComedie, travelTimeBikeToPolytech, link, description } = apartment;
-            const line = `${title}\t${rent}\t${rooms}\t${roomSurface}\t${street}\t${travelTimeBikeToComedie}\t${travelTimeBikeToPolytech}\t${description}\t${link}\n`
+            const line = `${link}\t${title}\t${rent}\t${rooms}\t${roomSurface}\t${street}\t${travelTimeBikeToComedie}\t${travelTimeBikeToPolytech}\t${description}\n`
             await fs.appendFile(path.join(process.cwd(), 'apartments', csvfileName), line);
           }
 
@@ -350,6 +350,105 @@ async function readListOfAppartments() {
   }
 }
 
-readListOfAppartments().then(console.log).catch(console.error);
+// readListOfAppartments().then(console.log).catch(console.error);
 
 
+async function createReminder(auth) {
+  // This function creates a reminder in the Google Calendar to remind the user to call the landlord after 2 days after the first message
+  // If a visit is scheduled, the reminder is set with the visit date and the number of the landlord
+
+  const apiKey = process.env.GOOGLE_API_KEY;
+  if (!apiKey) {
+    console.error('No Google API key provided');
+    return -1;
+  }
+
+  const { parse } = require('csv-parse/sync');
+
+  const filePath = path.join(process.cwd(), 'apartments', 'global.csv');
+  const content = await fs.readFile(filePath);
+
+  const records = parse(content, {
+    delimiter: '\t',
+    skip_records_with_empty_values: true,
+    skip_records_with_error: true
+
+  });
+
+
+  console.log(records);
+
+  const visitIndex = records[0].indexOf('DATE_VISIT');
+  const messageIndex = records[0].indexOf('DATE_MESSAGE');
+  const rentIndex = records[0].indexOf('RENT');
+  const addressIndex = records[0].indexOf('STREET');
+  const descriptionIndex = records[0].indexOf('DESCRIPTION');
+  const noMessageDate = records.filter(record => record[messageIndex] === '');
+
+  const scaningRecords = records.filter(record => record[messageIndex] !== '' && record[visitIndex] === '')
+
+  console.log("Envoyer un message pour les annonces suivantes: " + noMessageDate.map(record => JSON.stringify(({ link: record[0], title: record[1], rent: record[4] }))).join(', '));
+
+  const visitRecords = records.filter(record => record[visitIndex] !== '');
+
+  // Check the announce without a visit date and a message date 2 days before to create a reminder
+
+  // The date is in format mm-dd-yyyy
+  // Use the Google Calendar API to create a reminder
+
+  scaningRecords.forEach(async record => {
+    const date = record[messageIndex].split('-');
+    const messageDate = new Date(date[2], date[0] - 1, date[1]);
+    console.log(messageDate.toLocaleDateString())
+    // const twoDaysBefore = new Date(messageDate);
+    const dateNow = new Date();
+    // If the message is above 1 day in the past, we create a reminder
+    if (messageDate < dateNow) {
+      const twoDaysBefore = new Date(messageDate);
+      twoDaysBefore.setDate(twoDaysBefore.getDate() + 2);
+      const title = `Appeler l'annonce: ${record[1]}`;
+      console.log(`Appeler l'annonce: ${record[1]} le ${twoDaysBefore.toLocaleDateString()}`);
+
+      const calendar = google.calendar({ version: 'v3', auth });
+      const event = {
+        summary: title,
+        location: record[addressIndex],
+        description: `Lien: ${record[0]}\nLoyer: ${record[rentIndex]}\n\n${record[descriptionIndex]}`,
+        start: {
+          // TODO Add the time where to call the landlord
+          dateTime: twoDaysBefore.toISOString(),
+          timeZone: 'Europe/Paris',
+        },
+        end: {
+          dateTime: twoDaysBefore.toISOString(),
+          timeZone: 'Europe/Paris',
+        },
+      };
+
+      calendar.events.insert({
+        calendarId: 'primary',
+        resource: event,
+      }, (err, res) => {
+        if (err) return console.log('The API returned an error: ' + err);
+        console.log('Reminder created: %s', res.data.htmlLink);
+      });
+
+      // TODO Add the time reminder date to the excel file
+
+    }
+  })
+
+
+  const calendar = google.calendar({ version: 'v3', auth });
+  calendar.events.list({
+    calendarId: 'primary',
+    maxResults: 10,
+    q: 'Visite',
+  }, (err, res) => {
+    if (err) return console.log('The API returned an error: ' + err);
+    // console.log(res.data);
+  });
+
+}
+
+authorize().then(createReminder).catch(console.error);
