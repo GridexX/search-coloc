@@ -1,4 +1,4 @@
-apartments.json
+apartments/
 credentials.json
 token.json
 .env
