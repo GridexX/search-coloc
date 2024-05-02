@@ -6,6 +6,7 @@ const { authenticate } = require('@google-cloud/local-auth');
 const { google } = require('googleapis');
 const axios = require('axios');
 const { firstBy } = require('thenby');
+const { calculateTravelTime } = require('./utils');
 
 // If modifying these scopes, delete token.json.
 const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/calendar.readonly', 'https://www.googleapis.com/auth/calendar'];
@@ -68,50 +69,12 @@ async function authorize() {
   return client;
 }
 
-async function calculateTravelTime(origin, destination, mode) {
-
-  const apiKey = process.env.GOOGLE_API_KEY;
-
-  if (!apiKey) {
-    console.error('No Google Maps API key provided');
-    return -1;
-  }
-
-  const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}&mode=${mode}&key=${apiKey}`;
-
-  try {
-    const response = await axios.get(url);
-    const data = response.data;
-    if (data.status === 'OK') {
-      const travelTime = data.routes[0].legs[0].duration.text;
-      const travelTimeMatch = travelTime.match(/(\d+) min/);
-      if (travelTimeMatch) {
-        return parseInt(travelTimeMatch[1]);
-      }
-    } else {
-      console.error(`Error calculating travel time: ${data.status}`);
-    }
-  } catch (error) {
-    console.error(error);
-  }
-  return -1;
-
-}
-
 function sortApartments(apartments) {
 
   const sortedApartments = apartments.toSorted(
     firstBy((a, b) => (a.travelTimeBikeToPolytech + a.travelTimeBikeToComedie) - (b.travelTimeBikeToPolytech + b.travelTimeBikeToComedie))
       .thenBy((a, b) => a.rent - b.rent)
   );
-
-  // const sortedApartments = apartments.toSorted((a, b) => {
-  //   // aTravelTime is the sum of the travel time to Polytech and Comedie or undifined if the travel time couldn't be calculated
-  //   const aTravelTime = a.travelTimeBikeToPolytech + a.travelTimeBikeToComedie || 0;
-  //   const bTravelTime = b.travelTimeBikeToPolytech + b.travelTimeBikeToComedie || 0;
-  //   return aTravelTime - bTravelTime;
-  // });
-
 
   return sortedApartments;
 
@@ -168,6 +131,12 @@ async function getApartments(listings) {
             apartment.rent = parseInt(rentMatch[1]);
           } else {
             // If the H3 doesn't match a number, we assume it's the title
+
+            //Extract the surface from the title
+            const surfaceMatch = $(h3).text().match(/.*de\ (\d+) m.*/);
+            if (surfaceMatch) {
+              apartment.surface = parseInt(surfaceMatch[1]);
+            }
             apartment.title = $(h3).text();
 
             // Extract the number of rooms from the title
@@ -243,7 +212,7 @@ function filterApartments(apartments) {
   const minSurface = 10; // 10 m2 for the room
 
   const maxTravelComedie = 12; // 12 minutes by bike to Comedie
-  const maxTravelPolytech = 18; // 18 minutes by bike to Polytech
+  const maxTravelPolytech = 20; // 20 minutes by bike to Polytech
 
   return apartments.filter(apartment => {
     return apartment.rooms <= maxRooms &&
@@ -307,8 +276,8 @@ async function listMessages(auth) {
           const csvfileName = 'global.csv';
           // Write each keys of the object to the file
           for (const apartment of apartmentsFiltered) {
-            const { title, rent, rooms, roomSurface, street, travelTimeBikeToComedie, travelTimeBikeToPolytech, link, description } = apartment;
-            const line = `${link}\t${title}\t${rent}\t${rooms}\t${roomSurface}\t${street}\t${travelTimeBikeToComedie}\t${travelTimeBikeToPolytech}\t${description}\n`
+            const { surface, rent, rooms, roomSurface, street, travelTimeBikeToComedie, travelTimeBikeToPolytech, link, description } = apartment;
+            const line = `${link}\t${surface}\t${rent}\t${rooms}\t${roomSurface}\t${street}\t${travelTimeBikeToComedie}\t${travelTimeBikeToPolytech}\t${description}\t\t\t\n`
             await fs.appendFile(path.join(process.cwd(), 'apartments', csvfileName), line);
           }
 
@@ -383,6 +352,7 @@ async function createReminder(auth) {
   const rentIndex = records[0].indexOf('RENT');
   const addressIndex = records[0].indexOf('STREET');
   const descriptionIndex = records[0].indexOf('DESCRIPTION');
+  const reminderIndex = records[0].indexOf('DATE_REMINDER');
   const noMessageDate = records.filter(record => record[messageIndex] === '');
 
   const scaningRecords = records.filter(record => record[messageIndex] !== '' && record[visitIndex] === '')
@@ -408,6 +378,8 @@ async function createReminder(auth) {
       twoDaysBefore.setDate(twoDaysBefore.getDate() + 2);
       const title = `Appeler l'annonce: ${record[1]}`;
       console.log(`Appeler l'annonce: ${record[1]} le ${twoDaysBefore.toLocaleDateString()}`);
+
+      // TODO Add to the xls the Reminder date 
 
       const calendar = google.calendar({ version: 'v3', auth });
       const event = {
@@ -451,4 +423,4 @@ async function createReminder(auth) {
 
 }
 
-authorize().then(createReminder).catch(console.error);
+authorize().then(readListOfAppartments).catch(console.error);
