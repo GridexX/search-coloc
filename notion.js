@@ -124,7 +124,7 @@ program.command('post')
   .option('-g, --local <local>', 'If there is a local or a garage', 'false')
   .option('-l, --living <living>', 'If there is a living room', 'false')
   .option('-t, --terrace <terrace>', 'If there is a terrace or a balcon', 'false')
-  .option('-n, --notes <notes>', 'Notes about the apartment')
+  .option('-n, --notes <notes>', 'Notes about the apartment', '')
   .action((options) => {
     let { url, notes, address, rent, surface, roomSurface, rooms, caution, fees, local, living, terrace } = options
     rent = parseInt(rent)
