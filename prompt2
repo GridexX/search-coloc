@@ -1,0 +1,160 @@
+Tu dois m'aider à trouver un appartement en colocation. 
+Je vais te donner le texte d'une annonce et tu va me dire si elle correspont à mes critères:
+- Je suis un garçon, j'ai 23 ans et je suis étudiant
+- Salon
+- Balcon
+- Surface de la chambre supérieur à 10m2
+- 4 chambres maximum en comptant la mienne
+- Lave-vaiselle
+- Pas au rez-de-chaussé
+- Terrasse ou balcon
+- Garage ou cave pour le vélo
+- Lit double
+
+Voici l'annonce:
+
+Colocation
+Postée hier
+Signaler un problème
+Marine
+Propriétaire
+Membre depuis 5 ans
+Appartement
+5 pièces
+70 m²
+Inoccupé
+
+    Chambre 1
+    	
+    460 €/mois
+    	
+    11 m²
+    15/06/2024
+    	
+    💶 400 € de caution
+    	
+    🛌 Meublée , lit double
+    Chambre 2
+    	
+    460 €/mois
+    	
+    11 m²
+    15/06/2024
+    	
+    💶 400 € de caution
+    	
+    🛌 Meublée , lit double
+    Chambre 3
+    	
+    430 €/mois
+    	
+    9 m²
+    15/06/2024
+    	
+    💶 380 € de caution
+    	
+    🛌 Meublée , lit double
+
+Colocation 3 chambres
+
+Venez découvrir l'appartement de 70m² qui se situe au 5ème étage d'une résidence sécurisée (porte d'entrée et accessibilité entièrement rénovés fin 2018), avec ascenseur !
+
+L'appartement dispose de 3 chambres, salon/salle à manger avec balcon, cuisine entièrement équipée, salle de bain et toilette séparé.
+Tout y est pour votre confort: lave-linge, sèche-linge, lave-vaisselle, four, cafetière, vaisselle ...
+
+Les 3 chambres se libèrent au 15 juin
+- 2 chambres de 11m²
+- 1 chambre de 10m²
+Les chambres sont toutes lumineuses, équipées d'un lit 140 avec rangement + placard et bureau.
+
+Proche du Tram (arrêt Restanque ou Saint Martin) et à proximité de toutes commodités. Stationnement libre devant la résidence.
+
+Le loyer est toutes charges comprises (eau, électricité, internet, charges de copropriété ...). Seule l'assurance individuelle reste à souscrire.
+Garantie : 1 mois de caution demandée + garant.
+Eligible aux APL
+Diagnostic de performance énergétique
+Logement économe
+Logement
+< 50
+A
+51 à 90
+B
+91 à 150
+C
+C
+151 à 230
+D
+231 à 330
+E
+331 à 450
+F
+> 450
+G
+Logement énergivore
+Valeur exprimée en kWhEP/m².an
+Émissions de gaz à effet de serre
+Faibles émissions de GES
+Logement
+< 5
+A
+6 à 10
+B
+11 à 20
+C
+21 à 35
+D
+D
+36 à 55
+E
+56 à 80
+F
+> 80
+G
+Fortes émissions de GES
+Valeur exprimée en kg eq. CO2/m².an
+Annonce 	
+Type d'offre : 	Colocation
+Date de publication : 	01/05/2024 à 12h39
+Logement 	
+Localisation : 	
+Rue du Grau, Montpellier
+Type : 	Appartement 5 pièces
+Superficie : 	70 m²
+Meublé : 	Oui
+Colocs déjà présents : 	LOGEMENT VIDE
+Classe énergie (DPE) : 	C (91 à 150 kWhEP/m².an)
+Émissions (GES) : 	D (21 à 35 kg eq. CO2/m².an)
+Règles particulières 	
+Animaux acceptés 	Non
+Fumeurs acceptés 	Non
+
+Donnes moi l'ensemble des critères respectés, ceux manquants et ceux pas respectés.
+
+Une fois celà fait, tu dois me donner les arguments pour rentrer ces informations dans mon programme JavaScript. 
+Dans les notes, ajoute toutes informations complémentaires en dehors des critères.
+Adaptes les résultats en fonction des informations recueillies
+
+Voici le code des options:
+
+program.command('post')
+  .description('Post the Apartment\'s announce to Notion')
+  .requiredOption('-u, --url <link>', 'The link of the announce')
+  .requiredOption('-a, --address <address>', 'The address of the apartment')
+  .requiredOption('-re, --rent <rent>', 'The rent in € of the apartment')
+  .requiredOption('-s, --surface <surface>', 'The surface of the apartment')
+  .requiredOption('-rs, --roomSurface <roomSurface>', 'The room\'s surface')
+  .requiredOption('-ro, --rooms <rooms>', 'The number of rooms in the apartment')
+  .option('-c, --caution <caution>', 'The caution in €', '0')
+  .option('-f, --fees <fees>', 'Additional fees in €', '0')
+  .option('-g, --local <local>', 'If there is a local or a garage', 'false')
+  .option('-l, --living <living>', 'If there is a living room', 'false')
+  .option('-t, --terrace <terrace>', 'If there is a terrace or a balcon', 'false')
+  .option('-n, --notes <notes>', 'Notes about the apartment')
+
+Le loyer = loyer+charges si précisé. Les frais sont généralement intitulés frais ou frais d'agence. 
+Trouve le montant de la caution, généralement précisé par 1 mois de caution ou € de caution
+
+
+Write me the line to launch the program with the options found in the announce text.
+
+Here is an example with a rent of 500€: node notion.js post -re 500

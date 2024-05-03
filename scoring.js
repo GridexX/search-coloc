@@ -1,5 +1,5 @@
 
-const announce = process.argv.slice(2).join(' ').trim().replace(/\s+/g, ' ');
+const announce = process.argv.slice(2).join('\n\n').replace(/\s+/g, ' ');
 
 if (!announce) {
   console.log('Usage: node scoring.js <announce>');
@@ -8,7 +8,7 @@ if (!announce) {
 
 console.log('Announce:', announce);
 
-matches = [/filles uniquement/i, /rez-de-chaussée|rdc\ /, /local\ |garage\ |vélo\ |vélo\ /i, /salon|séjour/i, /terrasse|balcon/]
+matches = [/filles uniquement/i, /rez-de-chaussée|rdc\ /, /Colocs/, /local\ |garage\ |vélo\ |vélo\ /i, /salon|séjour/i, /terrasse|balcon/, /frais|charges/]
 
 for (const match of matches) {
   if (announce.match(match)) {
