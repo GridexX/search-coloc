@@ -91,10 +91,22 @@ async function postAnnounce(announce) {
       "Salon": {
         "checkbox": announce.living
       },
-      "Local/Garage": {
+      "Garage": {
         "checkbox": announce.local
-      }
-    },
+      },
+      "Traversant": {
+        "checkbox": announce.traversant
+      },
+      "Equipements": {
+        "rich_text": [
+          {
+            "text": {
+              "content": announce.equipment
+            }
+          }
+        ]
+      },
+    }
   }).then(response => {
     console.log(response)
   }).catch(error => {
@@ -121,21 +133,24 @@ program.command('post')
   .requiredOption('-ro, --rooms <rooms>', 'The number of rooms in the apartment')
   .option('-c, --caution <caution>', 'The caution in €', '0')
   .option('-f, --fees <fees>', 'Additional fees in €', '0')
-  .option('-g, --local <local>', 'If there is a local or a garage', 'false')
-  .option('-l, --living <living>', 'If there is a living room', 'false')
-  .option('-t, --terrace <terrace>', 'If there is a terrace or a balcon', 'false')
+  .option('-g, --garage', 'If there is a local or a garage for the bike')
+  .option('-l, --living', 'There is a living room')
+  .option('-t, --terrace', 'If there is a terrace or a balcon')
+  .option('-tv, --traversal', 'If the apartment is traversal')
+  .option('-e, --equipment <equipment>', 'Equipment in the apartment', '')
   .option('-n, --notes <notes>', 'Notes about the apartment', '')
   .action((options) => {
-    let { url, notes, address, rent, surface, roomSurface, rooms, caution, fees, local, living, terrace } = options
+    let { url, notes, address, rent, surface, roomSurface, rooms, caution, fees, local, living, terrace, equipment, traversal } = options
     rent = parseInt(rent)
     surface = parseInt(surface)
     roomSurface = parseInt(roomSurface)
     rooms = parseInt(rooms)
     caution = parseInt(caution)
     fees = parseInt(fees)
-    local = local === 'true'
-    living = living === 'true'
-    terrace = terrace === 'true'
+    terrace = terrace ?? false;
+    local = local ?? false;
+    living = living ?? false;
+    traversant = traversal ?? false;
     postAnnounce({
       url,
       fees,
@@ -148,7 +163,9 @@ program.command('post')
       caution,
       local,
       living,
-      terrace
+      terrace,
+      equipment,
+      traversant
     })
   })
 

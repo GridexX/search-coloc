@@ -33,14 +33,15 @@ program.command('post')
   .requiredOption('-ro, --rooms <rooms>', 'The number of rooms in the apartment')
   .option('-c, --caution <caution>', 'The caution in €', '0')
   .option('-f, --fees <fees>', 'Additional fees in €', '0')
-  .option('-g, --local <local>', 'If there is a local or a garage', 'false')
-  .option('-l, --living <living>', 'If there is a living room', 'false')
-  .option('-t, --terrace <terrace>', 'If there is a terrace or a balcon', 'false')
-  .option('-n, --notes <notes>', 'Notes about the apartment')
+  .option('-g, --local', 'If there is a local or a garage')
+  .option('-l, --living', 'There is a living room')
+  .option('-t, --terrace', 'If there is a terrace or a balcon')
+  .option('-e, --equipment <equipment>', 'Equipment in the apartment', '')
+  .option('-n, --notes <notes>', 'Notes about the apartment', '')
 
 Le loyer = loyer+charges si précisé. Les frais sont généralement intitulés frais ou frais d'agence. 
 Trouve le montant de la caution, généralement précisé par 1 mois de caution ou € de caution
-
+Pour savoir si il y a un salon, regarde dans le texte s'il est précisé salon ou séjour. Sinon à partir du nombre de pièces et de colocataires, tu peux déduire s'il y a un salon.
 
 Write me the line to launch the program with the options found in the announce text.
 
