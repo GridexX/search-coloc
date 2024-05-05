@@ -1,12 +1,12 @@
 const fs = require('fs').promises;
-const cheerio = require('cheerio');
+
 const path = require('path');
 const process = require('process');
 const { authenticate } = require('@google-cloud/local-auth');
 const { google } = require('googleapis');
-const axios = require('axios');
 const { firstBy } = require('thenby');
-const { calculateTravelTime } = require('./utils');
+const { getAnnounce, getApartmentsFromListings } = require('./utils');
+const { postAnnounce } = require('./notion');
 
 // If modifying these scopes, delete token.json.
 const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/calendar.readonly', 'https://www.googleapis.com/auth/calendar'];
@@ -72,7 +72,8 @@ async function authorize() {
 function sortApartments(apartments) {
 
   const sortedApartments = apartments.toSorted(
-    firstBy((a, b) => (a.travelTimeBikeToPolytech + a.travelTimeBikeToComedie) - (b.travelTimeBikeToPolytech + b.travelTimeBikeToComedie))
+    firstBy((a, b) => a.travelTimeBikeToComedie - b.travelTimeBikeToComedie)
+      .thenBy((a, b) => a.rooms - b.rooms)
       .thenBy((a, b) => a.rent - b.rent)
   );
 
@@ -80,147 +81,110 @@ function sortApartments(apartments) {
 
 }
 
-function getShortenedUrl(url) {
-  const parsedUrl = new URL(url);
-
-  // Extract the pathname component
-  const pathname = parsedUrl.pathname;
-
-  // Retrieve the second link
-  const encodedLink = pathname.split('L0/')[1];
-
-  // Decode the URL-encoded string
-  const decodedLink = decodeURIComponent(encodedLink);
-  const reduceLink = decodedLink.split('/a/')[1].split('/1/')[0];
-
-  const apartmentNumberMatch = reduceLink.match(/[a-zA-Z0-9]{6}/)
-
-  if (!apartmentNumberMatch) {
-    throw new Error('The reduce link does not match the expected format.');
-  }
-
-  const shortenedUrl = `https://lcrt.fr/${apartmentNumberMatch[0]}`
-
-  return shortenedUrl;
-}
-
-async function getApartments(listings) {
-
-  // Loop through the matched listings and extract the information from the td elements
-  const apartments = [];
-  for (const listing of listings) {
-    const $ = cheerio.load(listing);
-    const tds = $('td');
-
-    const apartment = {};
-
-    // Do something with the tds, for example print the text content to the console
-    for (const td of tds) {
-      // Find all h3 elements
-      let isTitle = false;
-      const h3s = $(td).find('h3');
-      const h4s = $(td).find('h4');
-      if (h3s.length && h3s.length > 0) {
-        isTitle = true;
-        for (const h3 of h3s) {
-
-
-          // If the H3 Match number, we extract and assign it as the rent
-          const rentMatch = $(h3).text().match(/^(\d+)$/);
-          if (rentMatch) {
-            apartment.rent = parseInt(rentMatch[1]);
-          } else {
-            // If the H3 doesn't match a number, we assume it's the title
-
-            //Extract the surface from the title
-            const surfaceMatch = $(h3).text().match(/.*de\ (\d+) m.*/);
-            if (surfaceMatch) {
-              apartment.surface = parseInt(surfaceMatch[1]);
-            }
-            apartment.title = $(h3).text();
-
-            // Extract the number of rooms from the title
-            const roomMatch = $(h3).text().match(/.*(\d+) pièces.*/);
-            if (roomMatch) {
-              apartment.rooms = parseInt(roomMatch[1]);
-            }
-          }
-
-          console.log(`H3: ${$(h3).text()}`);
-        }
-      }
-      if (h4s.length && h4s.length > 0) {
-        isTitle = true;
-        for (let index = 0; index < h4s.length; index++) {
-          const h4 = h4s[index];
-          const roomMatch = $(h4).text().match(/.*chambre de (\d+).*/);
-          if (roomMatch) {
-            // Convert the room surface to a number
-            apartment.roomSurface = parseInt(roomMatch[1]);
-          } else if (index === 1) {
-
-            const streetMatch = $(h4).text().match(/.*, (.*)/);
-            if (streetMatch) {
-              apartment.street = streetMatch[1];
-
-              // If the street is specified, calculate the travel time by bike
-              // TODO Add severall adresses to calculate the travel time to
-              // With a JSON file containing the adresses
-              const comedieAdress = 'Place de la Comedie, Montpellier, France';
-              const polytechAdress = 'Place Eugene Bataillon, Montpellier, France';
-              const destination = `${apartment.street}, Montpellier, France`;
-              const mode = 'bicycling';
-
-              const travelTimeBikeToComedie = await calculateTravelTime(comedieAdress, destination, mode);
-              const travelTimeBikeToPolytech = await calculateTravelTime(polytechAdress, destination, mode);
-
-              apartment.travelTimeBikeToComedie = travelTimeBikeToComedie;
-              apartment.travelTimeBikeToPolytech = travelTimeBikeToPolytech;
-            }
-          }
-        }
-        for (const h4 of h4s) {
-          console.log(`H4: ${$(h4).text()}`);
-        }
-      }
-
-      // Get the href from the a element inside the td
-      const a = $(td).find('a');
-      const href = a.attr('href');
-      const text = $(td).text().trim().replace(/\s+/g, ' ');
-      if (!isTitle && href && href.length > 0) {
-        console.log("p: " + href);
-        apartment.link = getShortenedUrl(href);
-      } else if (!isTitle && text && text.length > 0) {
-        apartment.description = text;
-      }
-    }
-    apartments.push(apartment);
-    console.log();
-  }
-  console.log(apartments);
-
-  return apartments;
-}
-
 /**
  * This function filters the apartments based on the user's preferences.
  */
-function filterApartments(apartments) {
+async function filterApartments(apartments) {
 
-  const maxRooms = 5; // 4 roommates and the living room
   const minSurface = 10; // 10 m2 for the room
 
   const maxTravelComedie = 12; // 12 minutes by bike to Comedie
-  const maxTravelPolytech = 20; // 20 minutes by bike to Polytech
 
-  return apartments.filter(apartment => {
-    return apartment.rooms <= maxRooms &&
-      apartment.roomSurface >= minSurface &&
-      apartment.travelTimeBikeToComedie <= maxTravelComedie &&
-      apartment.travelTimeBikeToPolytech <= maxTravelPolytech;
+  const filteredApartments = apartments.filter(apartment => {
+    apartment.roomSurface >= minSurface &&
+      (apartment.travelTimeBikeToComedie ?? 0) <= maxTravelComedie
   })
 
+  // Query each apartment to get information
+  const apartmentsInfos = await Promise.all(
+    // Filter the response to get some information and add it to the apartment object
+    filteredApartments.map(async (apartment) => {
+      const announce = await getAnnounce(apartment.link.replace('https://lcrt.fr/', ''));
+      const { travelTimeBikeToComedie, travelTimeBikeToPolytech, rooms } = apartment;
+      return { roomsNumber: rooms, travelTimeBikeToComedie, travelTimeBikeToPolytech, ...announce }
+    }))
+
+  let finalA = apartmentsInfos.filter(apartment => apartment !== undefined);
+  finalA = finalA.filter(apartment => apartment.only_women_allowed === true && apartment.rooms.length + apartment.housemates < 5 && apartment.furnished === true);
+
+  finalA = finalA.map(apartment => {
+    const {
+      housemates, room_surface, lodging_surface, url_shortened,
+      cost_total_rent, cost_caution, cost_fees, address_street,
+      dishwasher, elevator, balcony, air_conditioning, terrace, garage,
+      roomsNumber
+    } = apartment;
+    const { bed_type, availability } = apartment.rooms[0];
+    const living = roomsNumber > housemates + apartment.rooms.length;
+    const rooms = apartment.rooms.map(room => {
+      const { bed_type, availability, surface, cost_total_rent } = room
+      return {
+        bed_type,
+        availability,
+        surface,
+        cost_total_rent,
+      }
+    })
+
+    // Build the equipment sentence string with the equipment
+    let equipment = [];
+    if (dishwasher) {
+      equipment.push('lave-vaisselle');
+    }
+    if (elevator) {
+      equipment.push('ascenseur');
+    }
+    if (air_conditioning) {
+      equipment.push('climatisation');
+    }
+
+    equipment = equipment.join(', ');
+
+    return {
+      housemates: housemates + rooms.length,
+      rooms_available: rooms.length,
+      rent: cost_total_rent,
+      caution: cost_caution,
+      surface: lodging_surface,
+      roomSurface: room_surface,
+      bedType: bed_type,
+      availability,
+      fees: cost_fees ?? 0,
+      street: address_street,
+      terrace: balcony || terrace,
+      traversant: false,
+      equipment,
+      garage,
+      rooms,
+      bryan: rooms.length > 1,
+      url: url_shortened,
+      living
+    }
+  })
+
+  return finalA
+
+}
+
+async function readListOfAppartments() {
+  try {
+
+    // Check if there is a file called YYYY-MM-DD_apartments.json
+
+    const fileName = getFormattedDate(new Date()) + '_apartments.json';
+    const buffer = await fs.readFile(path.join(process.cwd(), 'apartments', fileName));
+    let apartments = JSON.parse(buffer);
+    apartments = sortApartments(apartments);
+
+    const apartmentsFiltered = await filterApartments(apartments);
+    console.log(JSON.stringify(apartmentsFiltered, null, 2));
+
+    return apartments;
+  } catch (error) {
+    console.error('No apartments found. Fetching from email.' + error);
+    authorize().then(listMessages).catch(console.error);
+    return [];
+  }
 }
 
 /**
@@ -261,28 +225,28 @@ async function listMessages(auth) {
           return [];
         }
 
-        const apartments = await getApartments(listings);
+        const apartments = await getApartmentsFromListings(listings);
 
         // Save the apartments to a file
         try {
           // TODO Save the file to a EXCEL file
           const apartmentsSorted = sortApartments(apartments);
+          console.log(`${apartmentsSorted.length} new apartments found.`)
           const fileName = getFormattedDate(new Date()) + '_apartments.json';
+          const fileNameFiltered = getFormattedDate(new Date()) + '_apartments_filtered.json';
           await fs.writeFile(path.join(process.cwd(), 'apartments', fileName), JSON.stringify(apartmentsSorted, null, 2));
 
-          const apartmentsFiltered = filterApartments(apartmentsSorted);
-
-          // Append to the global.xls file the new apartments
-          const csvfileName = 'global.csv';
-          // Write each keys of the object to the file
-          for (const apartment of apartmentsFiltered) {
-            const { surface, rent, rooms, roomSurface, street, travelTimeBikeToComedie, travelTimeBikeToPolytech, link, description } = apartment;
-            const line = `${link}\t${surface}\t${rent}\t${rooms}\t${roomSurface}\t${street}\t${travelTimeBikeToComedie}\t${travelTimeBikeToPolytech}\t${description}\t\t\t\n`
-            await fs.appendFile(path.join(process.cwd(), 'apartments', csvfileName), line);
+          const apartmentsFiltered = await filterApartments(apartmentsSorted);
+          if (apartmentsFiltered.length > 0) {
+            await fs.writeFile(path.join(process.cwd(), 'apartments', fileNameFiltered), JSON.stringify(apartmentsFiltered, null, 2));
+            console.log(`${apartmentsFiltered.length} Apartments filtered and saved`)
+          } else {
+            console.log('No apartments matching your criteria found 😥');
           }
 
-          console.log('Apartments saved to file.')
-          console.log(`${apartmentsFiltered.length} interesting / ${apartments.length} apartments.`)
+          Promise.all(apartmentsFiltered.map(async apartment => {
+            await postAnnounce(apartment);
+          }))
 
         } catch (error) {
           console.error(error);
@@ -297,29 +261,6 @@ function getFormattedDate(date) {
   return date.toLocaleString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
 
 }
-
-async function readListOfAppartments() {
-  try {
-
-    // Check if there is a file called YYYY-MM-DD_apartments.json
-
-    const fileName = getFormattedDate(new Date()) + '_apartments.json';
-    const buffer = await fs.readFile(path.join(process.cwd(), 'apartments', fileName));
-    let apartments = JSON.parse(buffer);
-    apartments = sortApartments(apartments);
-
-    const apartmentsFiltered = filterApartments(apartments);
-    console.log(apartmentsFiltered);
-
-    return apartments;
-  } catch (error) {
-    console.error('No apartments found. Fetching from email.' + error);
-    authorize().then(listMessages).catch(console.error);
-    return [];
-  }
-}
-
-// readListOfAppartments().then(console.log).catch(console.error);
 
 
 async function createReminder(auth) {

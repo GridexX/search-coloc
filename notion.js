@@ -2,17 +2,15 @@ const { Client } = require("@notionhq/client")
 const { Command } = require('commander');
 const { calculateTravelTime } = require("./utils");
 
-// Initializing a client
-const notion = new Client({
-  auth: process.env.NOTION_TOKEN,
-})
-
 function main() {
+  const notion = new Client({
+    auth: process.env.NOTION_TOKEN,
+  })
 
   notion.databases.retrieve({
     database_id: process.env.NOTION_DATABASE_ID,
   }).then(response => {
-    console.log(response)
+    console.log(JSON.stringify(response, null, 2))
   })
     .catch(error => {
       console.error(error)
@@ -22,13 +20,34 @@ function main() {
 
 async function postAnnounce(announce) {
 
+  const notion = new Client({
+    auth: process.env.NOTION_TOKEN,
+  })
+
+  notion.databases.retrieve({
+    database_id: process.env.NOTION_DATABASE_ID,
+  }).then(response => {
+    console.log(response)
+  })
+    .catch(error => {
+      console.error(error)
+    })
+
   const comedieAdress = 'Place de la Comedie, Montpellier, France';
   const polytechAdress = 'Place Eugene Bataillon, Montpellier, France';
-  const destination = `${announce.address}, Montpellier, France`;
+  const destination = `${announce.street}, Montpellier, France`;
   const mode = 'bicycling';
 
-  const travelTimeBikeToComedie = await calculateTravelTime(comedieAdress, destination, mode);
-  const travelTimeBikeToPolytech = await calculateTravelTime(polytechAdress, destination, mode);
+  const travelTimeBikeToComedie = announce.travelTimeBikeToComedie ?? await calculateTravelTime(comedieAdress, destination, mode);
+  const travelTimeBikeToPolytech = announce.travelTimeBikeToPolytech ?? await calculateTravelTime(polytechAdress, destination, mode);
+
+  let additionalNotes = '';
+  if (announce.rooms) {
+    if (announce.rooms.length > 1) {
+      additionalNotes = `Chambre de ${rooms[1].surface}m2 à ${rooms[1].rent}€ dispo au ${rooms[1].availability}\n`
+    }
+  }
+  additionalNotes += announce.notes;
 
   notion.pages.create({
     "icon": {
@@ -44,7 +63,7 @@ async function postAnnounce(announce) {
         "title": [
           {
             "text": {
-              "content": announce.address
+              "content": announce.street
             }
           }
         ]
@@ -71,10 +90,18 @@ async function postAnnounce(announce) {
         "rich_text": [
           {
             "text": {
-              "content": announce.notes
+              "content": additionalNotes
             }
           }
         ]
+      },
+      "Date": {
+        "date": {
+          "start": new Date().toISOString()
+        }
+      },
+      "Lit": {
+        "status": announce.bedType
       },
       "Loyer": {
         "number": announce.rent
@@ -97,6 +124,9 @@ async function postAnnounce(announce) {
       "Traversant": {
         "checkbox": announce.traversant
       },
+      "Bryan": {
+        "checkbox": announce.bryan
+      },
       "Equipements": {
         "rich_text": [
           {
@@ -108,7 +138,7 @@ async function postAnnounce(announce) {
       },
     }
   }).then(response => {
-    console.log(response)
+    console.log(response.url)
   }).catch(error => {
     console.error(error)
   })
@@ -139,6 +169,7 @@ program.command('post')
   .option('-tv, --traversal', 'If the apartment is traversal')
   .option('-e, --equipment <equipment>', 'Equipment in the apartment', '')
   .option('-n, --notes <notes>', 'Notes about the apartment', '')
+  .option('-b, --bed <bed>', "Bed Type 'simple' or 'double'", 'double')
   .action((options) => {
     let { url, notes, address, rent, surface, roomSurface, rooms, caution, fees, local, living, terrace, equipment, traversal } = options
     rent = parseInt(rent)
@@ -148,25 +179,31 @@ program.command('post')
     caution = parseInt(caution)
     fees = parseInt(fees)
     terrace = terrace ?? false;
-    local = local ?? false;
+    garage = local ?? false;
     living = living ?? false;
     traversant = traversal ?? false;
     postAnnounce({
       url,
       fees,
       notes,
-      address,
+      street: address,
       rent,
       surface,
       roomSurface,
       rooms,
       caution,
-      local,
+      garage,
       living,
       terrace,
       equipment,
-      traversant
+      traversant,
+      bedType: bed,
+      bryan: false
     })
   })
 
-program.parse();
+// program.parse();
+
+module.exports = {
+  postAnnounce,
+}
