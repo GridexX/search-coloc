@@ -7,15 +7,23 @@ function main() {
     auth: process.env.NOTION_TOKEN,
   })
 
-  notion.databases.retrieve({
-    database_id: process.env.NOTION_DATABASE_ID,
-  }).then(response => {
-    console.log(JSON.stringify(response, null, 2))
-  })
+  const pageId = "0d639abd-7bb7-4320-b584-4fb20795e895"
+
+  notion.pages.retrieve({ page_id: pageId })
+    .then(response => {
+      console.log(JSON.stringify(response, null, 2))
+    })
     .catch(error => {
       console.error(error)
     })
+
+  // notion.databases.retrieve({
+  //   database_id: process.env.NOTION_DATABASE_ID,
+  // })
+
 }
+
+// main()
 
 
 async function postAnnounce(announce) {
@@ -24,14 +32,14 @@ async function postAnnounce(announce) {
     auth: process.env.NOTION_TOKEN,
   })
 
-  notion.databases.retrieve({
-    database_id: process.env.NOTION_DATABASE_ID,
-  }).then(response => {
-    console.log(response)
-  })
-    .catch(error => {
-      console.error(error)
-    })
+  // notion.databases.retrieve({
+  //   database_id: process.env.NOTION_DATABASE_ID,
+  // }).then(response => {
+  //   console.log(JSON.stringify(response))
+  // })
+  //   .catch(error => {
+  //     console.error(error)
+  //   })
 
   const comedieAdress = 'Place de la Comedie, Montpellier, France';
   const polytechAdress = 'Place Eugene Bataillon, Montpellier, France';
@@ -44,7 +52,7 @@ async function postAnnounce(announce) {
   let additionalNotes = '';
   if (announce.rooms) {
     if (announce.rooms.length > 1) {
-      additionalNotes = `Chambre de ${rooms[1].surface}m2 à ${rooms[1].rent}€ dispo au ${rooms[1].availability}\n`
+      additionalNotes = `Chambre de ${announce.rooms[1].surface}m2 à ${announce.rooms[1].rent}€ dispo au ${announce.rooms[1].availability}\n`
     }
   }
   additionalNotes += announce.notes;
@@ -78,7 +86,7 @@ async function postAnnounce(announce) {
         "number": announce.surface
       },
       "Colocs": {
-        "number": announce.rooms
+        "number": announce.roomNumber ?? announce.housemates,
       },
       "Popo": {
         "number": travelTimeBikeToPolytech
@@ -100,9 +108,11 @@ async function postAnnounce(announce) {
           "start": new Date().toISOString()
         }
       },
-      "Lit": {
-        "status": announce.bedType
-      },
+      // "Lit": {
+      //   "select": {
+      //     "name": announce.bedType
+      //   }
+      // },
       "Loyer": {
         "number": announce.rent
       },
@@ -119,7 +129,7 @@ async function postAnnounce(announce) {
         "checkbox": announce.living
       },
       "Garage": {
-        "checkbox": announce.local
+        "checkbox": announce.garage
       },
       "Traversant": {
         "checkbox": announce.traversant
@@ -190,7 +200,7 @@ program.command('post')
       rent,
       surface,
       roomSurface,
-      rooms,
+      roomNumber: rooms,
       caution,
       garage,
       living,

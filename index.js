@@ -88,12 +88,12 @@ async function filterApartments(apartments) {
 
   const minSurface = 10; // 10 m2 for the room
 
-  const maxTravelComedie = 12; // 12 minutes by bike to Comedie
+  const maxTravelComedie = 10; // 12 minutes by bike to Comedie
 
-  const filteredApartments = apartments.filter(apartment => {
-    apartment.roomSurface >= minSurface &&
-      (apartment.travelTimeBikeToComedie ?? 0) <= maxTravelComedie
-  })
+  console.log("apartments");
+  console.log(apartments);
+
+  let filteredApartments = apartments.filter(apartment => apartment.roomSurface >= minSurface && (apartment.travelTimeBikeToComedie ?? 0) <= maxTravelComedie)
 
   // Query each apartment to get information
   const apartmentsInfos = await Promise.all(
@@ -104,25 +104,32 @@ async function filterApartments(apartments) {
       return { roomsNumber: rooms, travelTimeBikeToComedie, travelTimeBikeToPolytech, ...announce }
     }))
 
-  let finalA = apartmentsInfos.filter(apartment => apartment !== undefined);
-  finalA = finalA.filter(apartment => apartment.only_women_allowed === true && apartment.rooms.length + apartment.housemates < 5 && apartment.furnished === true);
+  let finalA = apartmentsInfos.filter(apartment => typeof (apartment) !== "undefined");
 
   finalA = finalA.map(apartment => {
     const {
       housemates, room_surface, lodging_surface, url_shortened,
       cost_total_rent, cost_caution, cost_fees, address_street,
-      dishwasher, elevator, balcony, air_conditioning, terrace, garage,
-      roomsNumber
+      dishwasher, balcony, terrace,
+      roomsNumber, only_women_allowed
     } = apartment;
+    const garage = apartment.garage ?? false;
+    const air_conditioning = apartment.air_conditioning ?? false;
+    const elevator = apartment.elevator ?? false;
+    const furnished = apartment.rooms[0].furnished && (apartment.furnished ?? false);
     const { bed_type, availability } = apartment.rooms[0];
+    let bedType = "Double";
+    if (bed_type === "simple") {
+      bedType = "Simple";
+    }
     const living = roomsNumber > housemates + apartment.rooms.length;
     const rooms = apartment.rooms.map(room => {
-      const { bed_type, availability, surface, cost_total_rent } = room
+      const { bed_type, availability, surface, cost_total_rent: rent } = room
       return {
         bed_type,
         availability,
         surface,
-        cost_total_rent,
+        rent,
       }
     })
 
@@ -139,28 +146,38 @@ async function filterApartments(apartments) {
     }
 
     equipment = equipment.join(', ');
+    const unitedLease = (apartment.description.toLowerCase().match(/bail\ solidaire/i))
 
     return {
+      unitedLease,
       housemates: housemates + rooms.length,
       rooms_available: rooms.length,
       rent: cost_total_rent,
       caution: cost_caution,
       surface: lodging_surface,
       roomSurface: room_surface,
-      bedType: bed_type,
+      bedType,
       availability,
       fees: cost_fees ?? 0,
       street: address_street,
-      terrace: balcony || terrace,
+      terrace: (balcony || terrace) ?? false,
       traversant: false,
       equipment,
       garage,
       rooms,
       bryan: rooms.length > 1,
       url: url_shortened,
-      living
+      living,
+      only_women_allowed,
+      furnished,
+      notes: ""
     }
   })
+
+  const fileName = getFormattedDate(new Date()) + '_apartments_filtered.json';
+  await fs.writeFile(path.join(process.cwd(), 'apartments', fileName), JSON.stringify(finalA, null, 2));
+
+  finalA = finalA.filter(apartment => apartment.only_women_allowed === false && apartment.housemates < 5 && apartment.furnished === true && !apartment.unitedLease);
 
   return finalA
 
