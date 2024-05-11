@@ -138,7 +138,6 @@ async function getApartmentsFromListings(listings) {
             }
           }
 
-          console.log(`H3: ${$(h3).text()}`);
         }
       }
       if (h4s.length && h4s.length > 0) {
@@ -171,9 +170,7 @@ async function getApartmentsFromListings(listings) {
             }
           }
         }
-        for (const h4 of h4s) {
-          console.log(`H4: ${$(h4).text()}`);
-        }
+
       }
 
       // Get the href from the a element inside the td
@@ -181,23 +178,95 @@ async function getApartmentsFromListings(listings) {
       const href = a.attr('href');
       const text = $(td).text().trim().replace(/\s+/g, ' ');
       if (!isTitle && href && href.length > 0) {
-        console.log("p: " + href);
         apartment.link = getShortenedUrl(href);
       } else if (!isTitle && text && text.length > 0) {
         apartment.description = text;
       }
     }
     apartments.push(apartment);
-    console.log();
   }
-  console.log(apartments);
 
   return apartments;
+}
+
+function getFormattedDate(date) {
+  return date.toLocaleString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
+
+}
+
+function getInfoFromAnnounce(apartment) {
+  const {
+    housemates, room_surface, lodging_surface, url_shortened,
+    cost_total_rent, cost_caution, cost_fees, address_street,
+    dishwasher, balcony, terrace,
+    roomsNumber, only_women_allowed
+  } = apartment;
+  const garage = apartment.garage ?? false;
+  const air_conditioning = apartment.air_conditioning ?? false;
+  const elevator = apartment.elevator ?? false;
+  const furnished = apartment.rooms[0].furnished && (apartment.furnished ?? false);
+  const { bed_type, availability } = apartment.rooms[0];
+  let bedType = "Double";
+  if (bed_type === "simple") {
+    bedType = "Simple";
+  }
+  const living = roomsNumber > housemates + apartment.rooms.length;
+  const rooms = apartment.rooms.map(room => {
+    const { bed_type, availability, surface, cost_total_rent: rent } = room
+    return {
+      bed_type,
+      availability,
+      surface,
+      rent,
+    }
+  })
+
+  // Build the equipment sentence string with the equipment
+  let equipment = [];
+  if (dishwasher) {
+    equipment.push('lave-vaisselle');
+  }
+  if (elevator) {
+    equipment.push('ascenseur');
+  }
+  if (air_conditioning) {
+    equipment.push('climatisation');
+  }
+
+  equipment = equipment.join(', ');
+  const unitedLease = (apartment.description.toLowerCase().match(/bail\ solidaire/i)) ? true : false;
+
+  return {
+    unitedLease,
+    housemates,
+    rooms_available: rooms.length,
+    rent: cost_total_rent,
+    caution: cost_caution,
+    surface: lodging_surface,
+    roomSurface: room_surface,
+    bedType,
+    availability,
+    fees: cost_fees ?? 0,
+    street: address_street,
+    terrace: (balcony || terrace) ?? false,
+    traversant: false,
+    equipment,
+    garage,
+    rooms,
+    bryan: rooms.length > 1,
+    url: url_shortened,
+    living,
+    only_women_allowed,
+    furnished,
+    notes: ""
+  }
 }
 
 
 module.exports = {
   calculateTravelTime,
   getAnnounce,
-  getApartmentsFromListings
+  getApartmentsFromListings,
+  getInfoFromAnnounce,
+  getFormattedDate,
 };

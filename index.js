@@ -5,7 +5,7 @@ const process = require('process');
 const { authenticate } = require('@google-cloud/local-auth');
 const { google } = require('googleapis');
 const { firstBy } = require('thenby');
-const { getAnnounce, getApartmentsFromListings } = require('./utils');
+const { getAnnounce, getApartmentsFromListings, getInfoFromAnnounce, getFormattedDate } = require('./utils');
 const { postAnnounce } = require('./notion');
 
 // If modifying these scopes, delete token.json.
@@ -88,7 +88,7 @@ async function filterApartments(apartments) {
 
   const minSurface = 10; // 10 m2 for the room
 
-  const maxTravelComedie = 10; // 12 minutes by bike to Comedie
+  const maxTravelComedie = 12; // 12 minutes by bike to Comedie
 
   console.log("apartments");
   console.log(apartments);
@@ -104,82 +104,14 @@ async function filterApartments(apartments) {
       return { roomsNumber: rooms, travelTimeBikeToComedie, travelTimeBikeToPolytech, ...announce }
     }))
 
-  let finalA = apartmentsInfos.filter(apartment => typeof (apartment) !== "undefined");
-
-  finalA = finalA.map(apartment => {
-    const {
-      housemates, room_surface, lodging_surface, url_shortened,
-      cost_total_rent, cost_caution, cost_fees, address_street,
-      dishwasher, balcony, terrace,
-      roomsNumber, only_women_allowed
-    } = apartment;
-    const garage = apartment.garage ?? false;
-    const air_conditioning = apartment.air_conditioning ?? false;
-    const elevator = apartment.elevator ?? false;
-    const furnished = apartment.rooms[0].furnished && (apartment.furnished ?? false);
-    const { bed_type, availability } = apartment.rooms[0];
-    let bedType = "Double";
-    if (bed_type === "simple") {
-      bedType = "Simple";
-    }
-    const living = roomsNumber > housemates + apartment.rooms.length;
-    const rooms = apartment.rooms.map(room => {
-      const { bed_type, availability, surface, cost_total_rent: rent } = room
-      return {
-        bed_type,
-        availability,
-        surface,
-        rent,
-      }
-    })
-
-    // Build the equipment sentence string with the equipment
-    let equipment = [];
-    if (dishwasher) {
-      equipment.push('lave-vaisselle');
-    }
-    if (elevator) {
-      equipment.push('ascenseur');
-    }
-    if (air_conditioning) {
-      equipment.push('climatisation');
-    }
-
-    equipment = equipment.join(', ');
-    const unitedLease = (apartment.description.toLowerCase().match(/bail\ solidaire/i))
-
-    return {
-      unitedLease,
-      housemates: housemates + rooms.length,
-      rooms_available: rooms.length,
-      rent: cost_total_rent,
-      caution: cost_caution,
-      surface: lodging_surface,
-      roomSurface: room_surface,
-      bedType,
-      availability,
-      fees: cost_fees ?? 0,
-      street: address_street,
-      terrace: (balcony || terrace) ?? false,
-      traversant: false,
-      equipment,
-      garage,
-      rooms,
-      bryan: rooms.length > 1,
-      url: url_shortened,
-      living,
-      only_women_allowed,
-      furnished,
-      notes: ""
-    }
-  })
+  let finalA = apartmentsInfos.filter(apartment => apartment.published === true).map(apartment => getInfoFromAnnounce(apartment))
 
   const fileName = getFormattedDate(new Date()) + '_apartments_filtered.json';
   await fs.writeFile(path.join(process.cwd(), 'apartments', fileName), JSON.stringify(finalA, null, 2));
 
-  finalA = finalA.filter(apartment => apartment.only_women_allowed === false && apartment.housemates < 5 && apartment.furnished === true && !apartment.unitedLease);
+  const apartmentWithFilters = finalA.filter(apartment => apartment.only_women_allowed === false && apartment.housemates < 5 && apartment.furnished === true && apartment.unitedLease === false);
 
-  return finalA
+  return apartmentWithFilters
 
 }
 
@@ -272,11 +204,6 @@ async function listMessages(auth) {
 
     });
   });
-}
-
-function getFormattedDate(date) {
-  return date.toLocaleString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
-
 }
 
 
