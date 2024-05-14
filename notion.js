@@ -71,7 +71,7 @@ async function postAnnounce(announce) {
         "title": [
           {
             "text": {
-              "content": announce.street
+              "content": announce.street ?? "No Address"
             }
           }
         ]
@@ -89,10 +89,10 @@ async function postAnnounce(announce) {
         "number": announce.roomNumber ?? announce.housemates,
       },
       "Popo": {
-        "number": travelTimeBikeToPolytech
+        "number": travelTimeBikeToPolytech ?? -1
       },
       "Com": {
-        "number": travelTimeBikeToComedie
+        "number": travelTimeBikeToComedie ?? -1
       },
       "Notes": {
         "rich_text": [
@@ -105,7 +105,7 @@ async function postAnnounce(announce) {
       },
       "Date": {
         "date": {
-          "start": new Date().toISOString()
+          "start": new Date(announce.availability)
         }
       },
       // "Lit": {
@@ -151,6 +151,8 @@ async function postAnnounce(announce) {
     console.log(response.url)
   }).catch(error => {
     console.error(error)
+    console.log("Error while posting the announce to Notion:")
+    console.log(JSON.stringify(announce, null, 2))
   })
 
 }
